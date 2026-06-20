@@ -1,26 +1,28 @@
 using BookingDDD.Core.Abstractions;
-using BookingDDD.Core.Application;
+using BookingDDD.Core.Application.Commands.BookResource;
+using BookingDDD.Core.Application.Commands.CancelBooking;
 using BookingDDD.Core.Domain;
 
 namespace BookingDDD.Test;
 
-public class BookingServiceTests
+public class CommandHandlerTests
 {
     [Test]
-    public async Task BookAsync_SavesCommitsThenPublishes()
+    public async Task BookResourceHandler_SavesCommitsThenPublishes()
     {
         var resource = CreateResource();
         var repository = new FakeResourceRepository(resource);
         var unitOfWork = new FakeUnitOfWork();
         var dispatcher = new FakeDispatcher(unitOfWork);
-        var service = new BookingService(
+        var handler = new BookResourceHandler(
             repository,
             unitOfWork,
             dispatcher);
 
-        var result = await service.BookAsync(
+        var result = await handler.HandleAsync(new BookResourceCommand(
             resource.Id,
-            TestPeriods.Create(10, 11));
+            new DateTime(2026, 6, 15, 10, 0, 0),
+            new DateTime(2026, 6, 15, 11, 0, 0)));
 
         Assert.Multiple(() =>
         {
@@ -36,20 +38,21 @@ public class BookingServiceTests
     }
 
     [Test]
-    public async Task BookAsync_DoesNotPersistWhenDomainRejectsPeriod()
+    public async Task BookResourceHandler_DoesNotPersistWhenDomainRejectsPeriod()
     {
         var resource = CreateResource();
         var repository = new FakeResourceRepository(resource);
         var unitOfWork = new FakeUnitOfWork();
         var dispatcher = new FakeDispatcher(unitOfWork);
-        var service = new BookingService(
+        var handler = new BookResourceHandler(
             repository,
             unitOfWork,
             dispatcher);
 
-        var result = await service.BookAsync(
+        var result = await handler.HandleAsync(new BookResourceCommand(
             resource.Id,
-            TestPeriods.Create(18, 19));
+            new DateTime(2026, 6, 15, 18, 0, 0),
+            new DateTime(2026, 6, 15, 19, 0, 0)));
 
         Assert.Multiple(() =>
         {
@@ -61,21 +64,53 @@ public class BookingServiceTests
     }
 
     [Test]
-    public void BookAsync_RollsBackAndDoesNotPublishWhenCommitFails()
+    public async Task BookResourceHandler_UsesDomainModelAndFailsOnOverlap()
+    {
+        var resource = CreateResource();
+        resource.Book(TestPeriods.Create(10, 12));
+        resource.ClearDomainEvents();
+        var repository = new FakeResourceRepository(resource);
+        var unitOfWork = new FakeUnitOfWork();
+        var dispatcher = new FakeDispatcher(unitOfWork);
+        var handler = new BookResourceHandler(
+            repository,
+            unitOfWork,
+            dispatcher);
+
+        var result = await handler.HandleAsync(new BookResourceCommand(
+            resource.Id,
+            new DateTime(2026, 6, 15, 11, 0, 0),
+            new DateTime(2026, 6, 15, 13, 0, 0)));
+
+        Assert.Multiple(() =>
+        {
+            Assert.That(result.IsFailure, Is.True);
+            Assert.That(result.ErrorMessage, Is.EqualTo(
+                "Resource is not available for this period."));
+            Assert.That(resource.Bookings, Has.Count.EqualTo(1));
+            Assert.That(repository.SaveCount, Is.Zero);
+            Assert.That(unitOfWork.CommitCount, Is.Zero);
+            Assert.That(dispatcher.PublishCount, Is.Zero);
+        });
+    }
+
+    [Test]
+    public void BookResourceHandler_RollsBackAndDoesNotPublishWhenCommitFails()
     {
         var resource = CreateResource();
         var repository = new FakeResourceRepository(resource);
         var unitOfWork = new FakeUnitOfWork { ThrowOnCommit = true };
         var dispatcher = new FakeDispatcher(unitOfWork);
-        var service = new BookingService(
+        var handler = new BookResourceHandler(
             repository,
             unitOfWork,
             dispatcher);
 
         Assert.That(
-            async () => await service.BookAsync(
+            async () => await handler.HandleAsync(new BookResourceCommand(
                 resource.Id,
-                TestPeriods.Create(10, 11)),
+                new DateTime(2026, 6, 15, 10, 0, 0),
+                new DateTime(2026, 6, 15, 11, 0, 0))),
             Throws.TypeOf<InvalidOperationException>());
 
         Assert.Multiple(() =>
@@ -86,7 +121,7 @@ public class BookingServiceTests
     }
 
     [Test]
-    public async Task CancelAsync_PersistsCancellationAndPublishesEvent()
+    public async Task CancelBookingHandler_PersistsCancellationAndPublishesEvent()
     {
         var resource = CreateResource();
         var booking = resource.Book(TestPeriods.Create(10, 11)).Value!;
@@ -94,15 +129,14 @@ public class BookingServiceTests
         var repository = new FakeResourceRepository(resource);
         var unitOfWork = new FakeUnitOfWork();
         var dispatcher = new FakeDispatcher(unitOfWork);
-        var service = new BookingService(
+        var handler = new CancelBookingHandler(
             repository,
             unitOfWork,
             dispatcher);
 
-        var result = await service.CancelAsync(
-            resource.Id,
+        var result = await handler.HandleAsync(new CancelBookingCommand(
             booking.Id,
-            new DateTime(2026, 6, 15, 9, 0, 0));
+            new DateTime(2026, 6, 15, 9, 0, 0)));
 
         Assert.Multiple(() =>
         {
@@ -115,19 +149,20 @@ public class BookingServiceTests
     }
 
     [Test]
-    public async Task BookAsync_ReturnsFailureWhenResourceDoesNotExist()
+    public async Task BookResourceHandler_ReturnsFailureWhenResourceDoesNotExist()
     {
         var repository = new FakeResourceRepository(null);
         var unitOfWork = new FakeUnitOfWork();
         var dispatcher = new FakeDispatcher(unitOfWork);
-        var service = new BookingService(
+        var handler = new BookResourceHandler(
             repository,
             unitOfWork,
             dispatcher);
 
-        var result = await service.BookAsync(
+        var result = await handler.HandleAsync(new BookResourceCommand(
             ResourceId.New(),
-            TestPeriods.Create(10, 11));
+            new DateTime(2026, 6, 15, 10, 0, 0),
+            new DateTime(2026, 6, 15, 11, 0, 0)));
 
         Assert.That(result.ErrorMessage, Is.EqualTo(
             "Resource does not exist."));
@@ -147,6 +182,14 @@ public class BookingServiceTests
 
         public Task<Resource?> GetByIdAsync(ResourceId resourceId) =>
             Task.FromResult(resource);
+
+        public Task<Resource?> GetByBookingIdAsync(BookingId bookingId)
+        {
+            var containsBooking = resource?.Bookings.Any(booking =>
+                booking.Id == bookingId) == true;
+
+            return Task.FromResult(containsBooking ? resource : null);
+        }
 
         public Task SaveAsync(Resource aggregate)
         {

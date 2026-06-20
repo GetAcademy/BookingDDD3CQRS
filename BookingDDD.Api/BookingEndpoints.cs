@@ -1,4 +1,8 @@
-using BookingDDD.Core.Application;
+using BookingDDD.Core.Application.Commands.BookResource;
+using BookingDDD.Core.Application.Commands.CancelBooking;
+using BookingDDD.Core.Application.Queries.GetAvailableSlots;
+using BookingDDD.Core.Application.Queries.GetBookingsForResource;
+using BookingDDD.Core.Application.Queries.GetCalendarForDay;
 using BookingDDD.Core.Domain;
 
 namespace BookingDDD.Api;
@@ -8,47 +12,91 @@ public static class BookingEndpoints
     public static async Task<IResult> CreateBookingAsync(
         Guid resourceId,
         CreateBookingRequest request,
-        BookingService bookingService)
+        BookResourceHandler handler)
     {
-        var periodResult = BookingPeriod.Create(request.Start, request.End);
-        if (periodResult.IsFailure)
+        var command = new BookResourceCommand(
+            new ResourceId(resourceId),
+            request.Start,
+            request.End);
+        var result = await handler.HandleAsync(command);
+
+        if (result.IsFailure)
         {
-            return Results.BadRequest(new ErrorResponse(
-                periodResult.ErrorMessage!));
+            return ToFailureHttpResult(result.ErrorMessage!);
         }
 
-        var result = await bookingService.BookAsync(
-            new ResourceId(resourceId),
-            periodResult.Value!);
+        var response = BookingResponse.From(result.Value!);
 
-        return ToHttpResult(result);
+        return Results.Created(
+            $"/api/resources/{resourceId}/bookings/{response.Id}",
+            response);
     }
 
     public static async Task<IResult> CancelBookingAsync(
-        Guid resourceId,
         Guid bookingId,
-        BookingService bookingService,
+        CancelBookingHandler handler,
         TimeProvider timeProvider)
     {
-        var result = await bookingService.CancelAsync(
-            new ResourceId(resourceId),
+        var command = new CancelBookingCommand(
             new BookingId(bookingId),
             timeProvider.GetLocalNow().DateTime);
+        var result = await handler.HandleAsync(command);
 
-        return ToHttpResult(result);
+        return result.IsSuccess
+            ? Results.Ok(BookingResponse.From(result.Value!))
+            : ToFailureHttpResult(result.ErrorMessage!);
     }
 
-    private static IResult ToHttpResult(Result<Booking> result)
+    public static async Task<IResult> GetBookingsForResourceAsync(
+        Guid resourceId,
+        GetBookingsForResourceHandler handler)
     {
-        if (result.IsSuccess)
-        {
-            return Results.Ok(BookingResponse.From(result.Value!));
-        }
+        var query = new GetBookingsForResourceQuery(
+            new ResourceId(resourceId));
 
-        var error = new ErrorResponse(result.ErrorMessage!);
-        return result.ErrorMessage == "Resource does not exist."
-            ? Results.NotFound(error)
-            : Results.BadRequest(error);
+        var bookings = await handler.HandleAsync(query);
+
+        return Results.Ok(bookings);
+    }
+
+    public static async Task<IResult> GetCalendarForDayAsync(
+        DateOnly date,
+        GetCalendarForDayHandler handler)
+    {
+        var calendar = await handler.HandleAsync(
+            new GetCalendarForDayQuery(date));
+
+        return Results.Ok(calendar);
+    }
+
+    public static async Task<IResult> GetAvailableSlotsAsync(
+        Guid resourceId,
+        DateOnly date,
+        GetAvailableSlotsHandler handler)
+    {
+        var query = new GetAvailableSlotsQuery(
+            new ResourceId(resourceId),
+            date);
+
+        var slots = await handler.HandleAsync(query);
+
+        return Results.Ok(slots);
+    }
+
+    private static IResult ToFailureHttpResult(string errorMessage)
+    {
+        var error = new ErrorResponse(errorMessage);
+
+        return errorMessage switch
+        {
+            "Resource does not exist." => Results.NotFound(error),
+            "Booking does not exist." => Results.NotFound(error),
+            "Booking does not exist on this resource." =>
+                Results.NotFound(error),
+            "Resource is not available for this period." =>
+                Results.Conflict(error),
+            _ => Results.BadRequest(error)
+        };
     }
 }
 

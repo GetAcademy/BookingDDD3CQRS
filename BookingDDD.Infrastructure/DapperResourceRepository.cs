@@ -52,6 +52,24 @@ public sealed class DapperResourceRepository : IResourceRepository
             bookings);
     }
 
+    public async Task<Resource?> GetByBookingIdAsync(BookingId bookingId)
+    {
+        const string resourceIdSql = """
+            SELECT ResourceId
+            FROM dbo.Bookings WITH (UPDLOCK, HOLDLOCK)
+            WHERE Id = @BookingId;
+            """;
+
+        var resourceId =
+            await _unitOfWork.QuerySingleOrDefaultAsync<Guid?>(
+                resourceIdSql,
+                new { BookingId = bookingId.Value });
+
+        return resourceId is null
+            ? null
+            : await GetByIdAsync(new ResourceId(resourceId.Value));
+    }
+
     public async Task SaveAsync(Resource resource)
     {
         const string updateResourceSql = """

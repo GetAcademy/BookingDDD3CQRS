@@ -1,6 +1,7 @@
 # BookingDDD
 
-This example summarizes the week's DDD topics without Active Record:
+This example shows DDD building blocks and a small CQRS split without Event
+Sourcing:
 
 - rich domain model
 - `Resource` as aggregate root
@@ -9,7 +10,11 @@ This example summarizes the week's DDD topics without Active Record:
 - Unit of Work and SQL transaction
 - domain events published after commit
 - multiple event handlers
+- command handlers that change state through the domain model
+- query handlers that read DTOs/read models directly from SQL
 - a small HTTP API and Axios example
+
+See `docs/cqrs-without-event-sourcing.md` for the teaching notes.
 
 ## Run
 
@@ -30,6 +35,19 @@ The SQL script seeds resource
 Audit and calendar handlers write to SQL after the aggregate transaction
 has committed. Notification handlers write simulated confirmations to the
 API console.
+
+## API shape
+
+Commands:
+
+- `POST /api/resources/{resourceId}/bookings`
+- `POST /api/bookings/{bookingId}/cancel`
+
+Queries:
+
+- `GET /api/resources/{resourceId}/bookings`
+- `GET /api/calendar?date=2026-06-15`
+- `GET /api/resources/{resourceId}/available-slots?date=2026-06-15`
 
 ## Two domain event dispatchers
 

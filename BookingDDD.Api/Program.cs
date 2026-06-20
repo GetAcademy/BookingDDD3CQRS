@@ -1,6 +1,12 @@
 using BookingDDD.Api;
 using BookingDDD.Core.Abstractions;
 using BookingDDD.Core.Application;
+using BookingDDD.Core.Application.Commands.BookResource;
+using BookingDDD.Core.Application.Commands.CancelBooking;
+using BookingDDD.Core.Application.Queries;
+using BookingDDD.Core.Application.Queries.GetAvailableSlots;
+using BookingDDD.Core.Application.Queries.GetBookingsForResource;
+using BookingDDD.Core.Application.Queries.GetCalendarForDay;
 using BookingDDD.Core.Domain;
 using BookingDDD.Infrastructure;
 
@@ -17,7 +23,13 @@ builder.Services.AddScoped<DapperUnitOfWork>();
 builder.Services.AddScoped<IUnitOfWork>(services =>
     services.GetRequiredService<DapperUnitOfWork>());
 builder.Services.AddScoped<IResourceRepository, DapperResourceRepository>();
-builder.Services.AddScoped<BookingService>();
+builder.Services.AddScoped<BookResourceHandler>();
+builder.Services.AddScoped<CancelBookingHandler>();
+
+builder.Services.AddScoped<IBookingQueries, DapperBookingQueries>();
+builder.Services.AddScoped<GetBookingsForResourceHandler>();
+builder.Services.AddScoped<GetCalendarForDayHandler>();
+builder.Services.AddScoped<GetAvailableSlotsHandler>();
 
 // Reflection-based dispatcher. Replace DomainEventDispatcher with
 // ManualDomainEventDispatcher to demonstrate explicit, hardcoded dispatch.
@@ -62,9 +74,21 @@ app.MapPost(
     "/api/resources/{resourceId:guid}/bookings",
     BookingEndpoints.CreateBookingAsync);
 
-app.MapDelete(
-    "/api/resources/{resourceId:guid}/bookings/{bookingId:guid}",
+app.MapPost(
+    "/api/bookings/{bookingId:guid}/cancel",
     BookingEndpoints.CancelBookingAsync);
+
+app.MapGet(
+    "/api/resources/{resourceId:guid}/bookings",
+    BookingEndpoints.GetBookingsForResourceAsync);
+
+app.MapGet(
+    "/api/calendar",
+    BookingEndpoints.GetCalendarForDayAsync);
+
+app.MapGet(
+    "/api/resources/{resourceId:guid}/available-slots",
+    BookingEndpoints.GetAvailableSlotsAsync);
 
 app.Run();
 

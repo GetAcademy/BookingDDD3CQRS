@@ -1,15 +1,15 @@
 using BookingDDD.Core.Abstractions;
 using BookingDDD.Core.Domain;
 
-namespace BookingDDD.Core.Application;
+namespace BookingDDD.Core.Application.Commands.CancelBooking;
 
-public sealed class BookingService
+public sealed class CancelBookingHandler
 {
     private readonly IResourceRepository _resourceRepository;
     private readonly IUnitOfWork _unitOfWork;
     private readonly IDomainEventDispatcher _eventDispatcher;
 
-    public BookingService(
+    public CancelBookingHandler(
         IResourceRepository resourceRepository,
         IUnitOfWork unitOfWork,
         IDomainEventDispatcher eventDispatcher)
@@ -19,40 +19,20 @@ public sealed class BookingService
         _eventDispatcher = eventDispatcher;
     }
 
-    public async Task<Result<Booking>> BookAsync(
-        ResourceId resourceId,
-        BookingPeriod period)
+    public async Task<Result<Booking>> HandleAsync(
+        CancelBookingCommand command)
     {
-        var resource = await _resourceRepository.GetByIdAsync(resourceId);
+        var resource =
+            await _resourceRepository.GetByBookingIdAsync(command.BookingId);
 
         if (resource is null)
         {
-            return Result<Booking>.Fail("Resource does not exist.");
+            return Result<Booking>.Fail("Booking does not exist.");
         }
 
-        var result = resource.Book(period);
-        if (result.IsFailure)
-        {
-            return result;
-        }
-
-        await SaveCommitAndPublishAsync(resource);
-        return result;
-    }
-
-    public async Task<Result<Booking>> CancelAsync(
-        ResourceId resourceId,
-        BookingId bookingId,
-        DateTime now)
-    {
-        var resource = await _resourceRepository.GetByIdAsync(resourceId);
-
-        if (resource is null)
-        {
-            return Result<Booking>.Fail("Resource does not exist.");
-        }
-
-        var result = resource.CancelBooking(bookingId, now);
+        var result = resource.CancelBooking(
+            command.BookingId,
+            command.Now);
         if (result.IsFailure)
         {
             return result;

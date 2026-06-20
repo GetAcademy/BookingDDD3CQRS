@@ -3,10 +3,10 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>BookingDDD API example</title>
+    <title>BookingDDD CQRS API example</title>
 </head>
 <body>
-    <h1>BookingDDD API example</h1>
+    <h1>BookingDDD CQRS API example</h1>
     <p>Open the browser console and use <code>bookingApi</code>.</p>
     <pre>
 const booking = await bookingApi.book(
@@ -14,6 +14,10 @@ const booking = await bookingApi.book(
     "2026-06-15T11:00:00");
 
 await bookingApi.cancel(booking.id);
+
+await bookingApi.bookings();
+await bookingApi.calendar("2026-06-15");
+await bookingApi.availableSlots("2026-06-15");
     </pre>
 
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
@@ -31,10 +35,34 @@ await bookingApi.cancel(booking.id);
             },
 
             async cancel(bookingId) {
-                const response = await axios.delete(
-                    `/api/resources/${resourceId}/bookings/${bookingId}`);
+                const response = await axios.post(
+                    `/api/bookings/${bookingId}/cancel`);
 
                 console.log("Booking cancelled:", response.data);
+                return response.data;
+            },
+
+            async bookings() {
+                const response = await axios.get(
+                    `/api/resources/${resourceId}/bookings`);
+
+                console.log("Bookings for resource:", response.data);
+                return response.data;
+            },
+
+            async calendar(date) {
+                const response = await axios.get(
+                    `/api/calendar?date=${date}`);
+
+                console.log("Calendar:", response.data);
+                return response.data;
+            },
+
+            async availableSlots(date) {
+                const response = await axios.get(
+                    `/api/resources/${resourceId}/available-slots?date=${date}`);
+
+                console.log("Available slots:", response.data);
                 return response.data;
             }
         };
