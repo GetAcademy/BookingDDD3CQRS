@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>BookingDDD API example</title>
+</head>
+<body>
+    <h1>BookingDDD API example</h1>
+    <p>Open the browser console and use <code>bookingApi</code>.</p>
+    <pre>
+const booking = await bookingApi.book(
+    "2026-06-15T10:00:00",
+    "2026-06-15T11:00:00");
+
+await bookingApi.cancel(booking.id);
+    </pre>
+
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script>
+        const resourceId = "00000000-0000-0000-0000-000000000000";
+
+        window.bookingApi = {
+            async book(start, end) {
+                const response = await axios.post(
+                    `/api/resources/${resourceId}/bookings`,
+                    { start, end });
+
+                console.log("Booking created:", response.data);
+                return response.data;
+            },
+
+            async cancel(bookingId) {
+                const response = await axios.delete(
+                    `/api/resources/${resourceId}/bookings/${bookingId}`);
+
+                console.log("Booking cancelled:", response.data);
+                return response.data;
+            }
+        };
+
+        console.info(
+            "bookingApi is ready. See the example on the page.");
+    </script>
+</body>
+</html>

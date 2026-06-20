@@ -1,0 +1,9 @@
+<Solution>
+  <Folder Name="/Database/">
+    <File Path="database/create-database.sql" />
+  </Folder>
+  <Project Path="BookingDDD.Api/BookingDDD.Api.csproj" />
+  <Project Path="BookingDDD.Core/BookingDDD.Core.csproj" />
+  <Project Path="BookingDDD.Infrastructure/BookingDDD.Infrastructure.csproj" />
+  <Project Path="BookingDDD.Test/BookingDDD.Test.csproj" />
+</Solution>
